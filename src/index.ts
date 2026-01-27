@@ -106,11 +106,13 @@ app.all('*', async (c) => {
   const request = c.req.raw;
   const url = new URL(request.url);
 
+  console.log('[PROXY] Handling request:', url.pathname);
+
   // Ensure clawdbot is running (this will wait for startup)
   try {
     await ensureClawdbotGateway(sandbox, c.env);
   } catch (error) {
-    console.error('Failed to start Clawdbot:', error);
+    console.error('[PROXY] Failed to start Clawdbot:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     let hint = 'Check worker logs with: wrangler tail';
@@ -132,29 +134,25 @@ app.all('*', async (c) => {
     console.log('[WS] Proxying WebSocket connection to Clawdbot');
     console.log('[WS] URL:', request.url);
     console.log('[WS] Search params:', url.search);
-    console.log('[WS] Headers:', JSON.stringify(Object.fromEntries(request.headers.entries())));
     const wsResponse = await sandbox.wsConnect(request, CLAWDBOT_PORT);
     console.log('[WS] wsConnect response status:', wsResponse.status);
-    console.log('[WS] wsConnect response headers:', JSON.stringify(Object.fromEntries(wsResponse.headers.entries())));
     return wsResponse;
   }
 
-  console.log('[HTTP] Proxying request:', url.pathname + url.search);
-  console.log('[HTTP] Method:', request.method);
-  console.log('[HTTP] Headers:', JSON.stringify(Object.fromEntries(request.headers.entries())));
+  console.log('[HTTP] Proxying:', url.pathname + url.search);
   const httpResponse = await sandbox.containerFetch(request, CLAWDBOT_PORT);
   console.log('[HTTP] Response status:', httpResponse.status);
-  console.log('[HTTP] Response headers:', JSON.stringify(Object.fromEntries(httpResponse.headers.entries())));
   
-  // For chat page, log the body
-  if (url.pathname.includes('/chat')) {
-    const clonedResponse = httpResponse.clone();
-    const body = await clonedResponse.text();
-    console.log('[HTTP] Chat page body length:', body.length);
-    console.log('[HTTP] Chat page body preview:', body.substring(0, 500));
-  }
+  // Add debug header to verify worker handled the request
+  const newHeaders = new Headers(httpResponse.headers);
+  newHeaders.set('X-Worker-Debug', 'proxy-to-clawdbot');
+  newHeaders.set('X-Debug-Path', url.pathname);
   
-  return httpResponse;
+  return new Response(httpResponse.body, {
+    status: httpResponse.status,
+    statusText: httpResponse.statusText,
+    headers: newHeaders,
+  });
 });
 
 /**
