@@ -173,7 +173,7 @@ if (process.env.ANTHROPIC_BASE_URL) {
     console.log('Configuring custom Anthropic base URL:', process.env.ANTHROPIC_BASE_URL);
     config.models = config.models || {};
     config.models.providers = config.models.providers || {};
-    config.models.providers.anthropic = {
+    const providerConfig = {
         baseUrl: process.env.ANTHROPIC_BASE_URL,
         api: 'anthropic-messages',
         models: [
@@ -182,6 +182,11 @@ if (process.env.ANTHROPIC_BASE_URL) {
             { id: 'claude-haiku-3-5-20241022', name: 'Claude Haiku 3.5', contextWindow: 200000 },
         ]
     };
+    // Include API key in provider config if set (required when using custom baseUrl)
+    if (process.env.ANTHROPIC_API_KEY) {
+        providerConfig.apiKey = process.env.ANTHROPIC_API_KEY;
+    }
+    config.models.providers.anthropic = providerConfig;
 }
 
 // Write updated config
